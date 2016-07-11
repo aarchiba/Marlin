@@ -2052,7 +2052,7 @@ static void clean_up_after_endstop_or_probe_move() {
       long stop_steps = stepper.position(Z_AXIS);
       float mm = start_z - float(start_steps - stop_steps) / planner.axis_steps_per_mm[Z_AXIS];
       current_position[Z_AXIS] = mm;
-      if (mm <= -10) {
+      if (mm <= -10+1.0/planner.axis_steps_per_mm[Z_AXIS]) {
         #if ENABLED(DEBUG_LEVELING_FEATURE)
           if (DEBUGGING(LEVELING)) {
             SERIAL_ECHOLNPGM("Bed not hit during probe");
