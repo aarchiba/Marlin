@@ -2052,6 +2052,25 @@ static void clean_up_after_endstop_or_probe_move() {
       long stop_steps = stepper.position(Z_AXIS);
       float mm = start_z - float(start_steps - stop_steps) / planner.axis_steps_per_mm[Z_AXIS];
       current_position[Z_AXIS] = mm;
+      if (mm <= -10) {
+        #if ENABLED(DEBUG_LEVELING_FEATURE)
+          if (DEBUGGING(LEVELING)) {
+            SERIAL_ECHOLNPGM("Bed not hit during probe");
+            DEBUG_POS("", current_position);
+          }
+        #endif
+        feedrate = old_feedrate;
+        return NAN;
+      } else if (stop_steps >= start_steps-1) {
+        #if ENABLED(DEBUG_LEVELING_FEATURE)
+          if (DEBUGGING(LEVELING)) {
+            SERIAL_ECHOLNPGM("Endstop already triggered before probe");
+            DEBUG_POS("", current_position);
+          }
+        #endif
+        feedrate = old_feedrate;
+        return NAN;
+      }
 
       #if ENABLED(DEBUG_LEVELING_FEATURE)
         if (DEBUGGING(LEVELING)) DEBUG_POS("run_z_probe (DELTA) 2", current_position);
@@ -2150,7 +2169,10 @@ static void clean_up_after_endstop_or_probe_move() {
     #if ENABLED(DEBUG_LEVELING_FEATURE)
       if (DEBUGGING(LEVELING)) SERIAL_ECHOPGM("> ");
     #endif
-    if (DEPLOY_PROBE()) return NAN;
+    if (DEPLOY_PROBE()) {
+      feedrate = old_feedrate;
+      return NAN;
+    }
 
     float measured_z = run_z_probe();
 
@@ -2158,7 +2180,10 @@ static void clean_up_after_endstop_or_probe_move() {
       #if ENABLED(DEBUG_LEVELING_FEATURE)
         if (DEBUGGING(LEVELING)) SERIAL_ECHOPGM("> ");
       #endif
-      if (STOW_PROBE()) return NAN;
+      if (STOW_PROBE()) {
+        feedrate = old_feedrate;
+        return NAN;
+      }
     }
     else {
       #if ENABLED(DEBUG_LEVELING_FEATURE)
@@ -3509,6 +3534,12 @@ inline void gcode_G28() {
           #endif //DELTA
 
           float measured_z = probe_pt(xProbe, yProbe, stow_probe_after_each, verbose_level);
+          if (isnan(measured_z)) {
+            if (verbose_level > 0) {
+              SERIAL_PROTOCOLLNPGM("G29 probe failed");
+            }
+            return; // probe_pt failed
+          }
 
           #if DISABLED(DELTA)
             mean += measured_z;
